@@ -11,7 +11,7 @@ cachetools==5.5.0
 certifi==2024.8.30
 charset-normalizer==3.4.0
 click==8.1.7
-crewai==0.5.0
+crewai==0.1.7
 dataclasses-json==0.6.7
 distro==1.9.0
 docx==0.2.4
@@ -43,7 +43,7 @@ multidict==6.1.0
 mypy-extensions==1.0.0
 narwhals==1.11.0
 numpy==1.26.4
-openai==1.52.2
+openai==0.28.1
 packaging==23.2
 pandas==2.2.3
 pillow==10.4.0
