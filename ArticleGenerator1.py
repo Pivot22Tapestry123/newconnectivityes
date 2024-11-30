@@ -1,10 +1,10 @@
 import traceback
-import requests
 import streamlit as st
 import os
 import json
 import warnings
-from crewai import Agent, Task, Crew, Process
+from crewai import Agent, Task, Crew
+from langchain.chat_models import AzureChatOpenAI
 import openai
 
 # Suppress warnings
@@ -34,19 +34,32 @@ st.write(uploaded_file)
 
 # API Key and endpoint inputs for Azure OpenAI
 azure_api_key = st.text_input("Enter your Azure OpenAI API Key", type="password")
-azure_endpoint = "https://rstapestryopenai2.openai.azure.com/"
-azure_deployment = "gpt-4"  # Deployment name as per your Azure configuration
+azure_api_base = "https://rstapestryopenai2.openai.azure.com/"
 azure_api_version = "2024-02-15-preview"
-
-# Set OpenAI API base and key for Azure
-openai.api_key = azure_api_key
-openai.api_base = azure_endpoint
-
-# Set the OPENAI_API_KEY environment variable for libraries expecting it this way
-os.environ["OPENAI_API_KEY"] = azure_api_key
+deployment_name = "gpt-4"
 
 # Temperature slider
 temperature = st.slider("Set the temperature for the output (0 = deterministic, 1 = creative)", min_value=0.0, max_value=1.0, value=0.7)
+
+# Initialize Azure OpenAI instance
+if azure_api_key:
+    try:
+        openai.api_key = azure_api_key
+        openai.api_base = azure_api_base
+
+        llm = AzureChatOpenAI(
+            openai_api_key=azure_api_key,
+            openai_api_base=azure_api_base,
+            openai_api_version=azure_api_version,
+            deployment_name=deployment_name,
+            openai_api_type="azure",
+            temperature=temperature
+        )
+        st.success("Azure OpenAI API connection successful!")
+    except Exception as e:
+        st.error(f"Error connecting to Azure OpenAI API: {str(e)}")
+else:
+    st.warning("Please enter your Azure OpenAI API Key.")
 
 # Define prompts for agents and tasks
 if 'prompts' not in st.session_state:
@@ -88,26 +101,12 @@ if st.button("Generate Research Article"):
         transcripts = uploaded_file.read().decode("utf-8")
 
         try:
-            # Test Azure OpenAI API connection with a small completion request
-            response = requests.post(
-                f"{azure_endpoint}openai/deployments/{azure_deployment}/chat/completions?api-version={azure_api_version}",
-                headers={
-                    "api-key": azure_api_key,
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "messages": [{"role": "system", "content": "Test connection."}],
-                    "max_tokens": 5
-                }
-            )
-            response.raise_for_status()
-            st.success("API connection successful!")
-
             # Define agents and tasks with user-defined prompts
             planner = Agent(
                 role=st.session_state['prompts']['planner']['role'],
                 goal=st.session_state['prompts']['planner']['goal'],
                 backstory=st.session_state['prompts']['planner']['backstory'],
+                llm=llm,
                 allow_delegation=False,
                 verbose=True,
                 temperature=temperature
@@ -117,6 +116,7 @@ if st.button("Generate Research Article"):
                 role=st.session_state['prompts']['writer']['role'],
                 goal=st.session_state['prompts']['writer']['goal'],
                 backstory=st.session_state['prompts']['writer']['backstory'],
+                llm=llm,
                 allow_delegation=False,
                 verbose=True,
                 temperature=temperature
@@ -126,6 +126,7 @@ if st.button("Generate Research Article"):
                 role=st.session_state['prompts']['editor']['role'],
                 goal=st.session_state['prompts']['editor']['goal'],
                 backstory=st.session_state['prompts']['editor']['backstory'],
+                llm=llm,
                 allow_delegation=False,
                 verbose=True,
                 temperature=temperature
@@ -162,11 +163,6 @@ if st.button("Generate Research Article"):
             st.success("Research article generated successfully!")
             st.markdown(result)
 
-        except requests.exceptions.RequestException as e:
-            st.error(f"API Error: {str(e)}")
-            if hasattr(e, 'response'):
-                st.error(f"Response Status Code: {e.response.status_code}")
-                st.error(f"Response Content: {e.response.text}")
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
             st.error(f"Traceback: {traceback.format_exc()}")
